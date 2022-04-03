@@ -1,17 +1,18 @@
 <?php
 session_start();
+require ('../library.php');
 
-$form = [
-    'name' => '',
-    'email' => '',
-    'password' => ''
-];
-$error = [];
-
-/* htmlspcialcharsを短くする */
-function h($value) {
-    return htmlspecialchars($value, ENT_QUOTES);
+/* 新規登録から書き直す場合 */
+if(isset($_GET['action']) && $_GET['action'] === 'rewrite' && isset($_SESSION['form'])){
+    $form = $_SESSION['form'];
+}else{
+    $form = [
+        'name' => '',
+        'email' => '',
+        'password' => ''
+    ];
 }
+$error = [];
 
 /* フォームのチェック */
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
@@ -23,6 +24,25 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $form['email'] = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_STRING);
     if($form['email'] === ''){
         $error['email'] = 'blank';
+    } else {
+        $db = dbconnect();
+        $stmt = $db->prepare('select count(*) from members where email=?');
+        if(!$stmt){
+            die($db->error);
+        }
+        $stmt->bind_param('s', $form['email']);
+        $success = $stmt->execute();
+        if(!$success){
+            die($db->error);
+        }
+
+        $stmt->bind_result($cnt);
+        $stmt->fetch();
+        // var_dump($cnt);
+
+        if($cnt > 0){
+            $error['email'] = 'duplicate';
+        }
     }
 
     $form['password'] = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
@@ -100,7 +120,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                     <?php if(isset($error['email']) && $error['email'] === 'blank'): ?>
                         <p class="error">* メールアドレスを入力してください</p>
                     <?php endif; ?>
+                    <?php if(isset($error['email']) && $error['email'] === 'duplicate'): ?>
                         <p class="error">* 指定されたメールアドレスはすでに登録されています</p>
+                    <?php endif; ?>
                 <dt>パスワード<span class="required">必須</span></dt>
                 <dd>
                     <input type="password" name="password" size="10" maxlength="20" value="<?php echo h($form['password']); ?>"/>
